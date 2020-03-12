@@ -89,11 +89,11 @@ def get_data():
 
 data, data_labels = get_data()
 
-train = data[:2000] # but I use 50000
-train_labels = data_labels[:2000]
+train = data[:50000]
+train_labels = data_labels[:50000]
 
-test = data[2000:]
-test_labels = data_labels[2000:]
+test = data[50000:]
+test_labels = data_labels[50000:]
 
 mean = train.mean(axis=0)
 train -= mean
