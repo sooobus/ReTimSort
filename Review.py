@@ -44,14 +44,13 @@ def get_data():
     pd.options.mode.chained_assignment = None
     directory = os.path.join("/home/leha/Desktop/projects/all_timsort_data") # my path :))
     # Maybe i can write better, smth like str(os.path.abspath(__file__)[:-len(name_file)]) + '/all_timsort_data/'
-    train_labels = np.asarray([])
-    train = np.asarray([])
+    train_pairs = []
     global all_res
     z = 0
     for root, dirs, files in os.walk(directory):
         for file in files:
             if file.endswith(".csv"):
-                db = pd.read_csv("/home/leha/Desktop/projects/all_timsort_data/" + file)
+                db = pd.read_csv("D:/infa_Lesha/all_timsort_data/" + file)
                 z_m = 0
                 all_sizes = []
                 for i in range(len(db['Best_minrun'])):
@@ -77,17 +76,17 @@ def get_data():
                     df['Best_Time'][i - z_m] = cp.deepcopy(df['Best_Time'][i - z_m].split())
                 
                 for i in range(len(df['Quantity'])):
-                    train = np.append(train, 0)
-                    train_labels = np.append(train_labels, 0)
-                    train[z] = df['Quantity'][i]
-                    train_labels[z] = df['Best_Minrun'][i][0]
+                    train_pairs.append([float(df['Quantity'][i]), float(df['Best_Minrun'][i][0])])
                     z += 1
                 for i in range(len(df['Quantity'])):
                     all_res[df['Quantity'][i]] = {'minruns': df['Best_Minrun'][i], 'times':df['Best_Time'][i]} # for graphics
 
-    return [train, train_labels]
+    return train_pairs
 
-data, data_labels = get_data()
+pairs = get_data()
+pairs.sort()
+
+data, data_labels = np.asarray([pair[0] for pair in pairs]), np.asarray([pair[1] for pair in pairs])
 
 train = data[:50000]
 train_labels = data_labels[:50000]
@@ -102,9 +101,9 @@ train /= std
 
 test -= mean
 test /= std
-data = {'mean': mean, 'std': std}
+data_p = {'mean': mean, 'std': std}
 with open('data.json', 'w') as f_write:
-    json.dump(data, f_write)
+    json.dump(data_p, f_write)
 
 
 
