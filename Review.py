@@ -388,7 +388,7 @@ def test_numb_dropout(arr, min_drop, max_drop, epochs):
     best_err = 1000
     best_drop = 0
     for j in range(1, 10):
-        drop = (max_drop - min_drop) / j * 10
+        drop = (max_drop - min_drop) * j / 10
         arr2 = cp.deepcopy(arr)
         arr2.append({"activation": "Dropout", "drop_procent": drop})
         model = build_model_by_arr(arr)
