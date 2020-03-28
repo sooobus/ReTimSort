@@ -323,3 +323,208 @@ plt.plot(range(1, len(smooth_mae_history) + 1), smooth_mae_history)
 plt.xlabel('Epochs')
 plt.ylabel('Validation MAE')
 plt.show()
+
+
+
+def build_model_by_arr(arr):
+    global train
+    model = models.Sequential()
+    model.add(layers.Dense(1, activation='relu', input_dim=1))
+    for i in range(len(arr)):
+        if arr[i]["activation"] == "Dropout":
+            model.add(layers.Dropout(arr[i]["drop_procent"]))
+        elif "regularizer" in [*arr[i].keys()]:
+            model.add(layers.Dense(arr[i]["neirons"], kernel_regularizer=regularizers.l2(arr[i]["regularizer"]), 
+                                   activation=arr[i]["activation"]))
+        elif "activation" in [*arr[i].keys()]:
+            model.add(layers.Dense(arr[i]["neirons"], activation=arr[i]["activation"]))
+        else:
+            model.add(layers.Dense(arr[i]["neirons"]))
+    model.add(layers.Dense(1))
+    model.compile(optimizer="rmsprop", loss="mse", metrics=["mse"])
+    return model
+
+
+def test_numb_neirons(arr, last, epochs):
+    best_err = 1000
+    best_act = ""
+    best_neirons = 0
+    for j in range(1, 20):
+        neirons = int(last * ((3 - 0.3) / 10) * j)
+        arr2 = cp.deepcopy(arr)
+        arr2.append({"activation": "relu", "neirons": neirons})
+        model1 = build_model_by_arr(arr)
+        model1.fit(train, train_labels, epochs=epochs, verbose=0)
+        test_mae_score = model1.evaluate(test, test_labels)[1]
+        if best_err > test_mae_score:
+            best_act = "relu"
+            best_neirons = neirons
+
+        arr2 = cp.deepcopy(arr)
+        arr2.append({"activation": "sigmoid", "neirons": neirons})
+        model2 = build_model_by_arr(arr)
+        model2.fit(train, train_labels, epochs=epochs, verbose=0)
+        test_mae_score = model2.evaluate(test, test_labels)[1]
+        if best_err > test_mae_score:
+            best_act = "sigmoid"
+            best_neirons = neirons
+            best_err = test_mae_score
+
+        arr2 = cp.deepcopy(arr)
+        arr2.append({"activation": "softmax", "neirons": neirons})
+        model3 = build_model_by_arr(arr)
+        model3.fit(train, train_labels, epochs=epochs, verbose=0)
+        test_mae_score = model3.evaluate(test, test_labels)[1]
+        if best_err > test_mae_score:
+            best_act = "softmax"
+            best_neirons = neirons
+            best_err = test_mae_score
+    
+    arr.append({"activation": best_act, "neirons": best_neirons})
+    return [arr, best_err]
+
+
+def test_numb_dropout(arr, min_drop, max_drop, epochs):
+    best_err = 1000
+    best_drop = 0
+    for j in range(1, 10):
+        drop = (max_drop - min_drop) / j * 10
+        arr2 = cp.deepcopy(arr)
+        arr2.append({"activation": "Dropout", "drop_procent": drop})
+        model = build_model_by_arr(arr)
+        model.fit(train, train_labels, epochs=epochs, verbose=0)
+        test_mae_score = model.evaluate(test, test_labels)[1]
+        if best_err > test_mae_score:
+            best_drop = drop
+            best_err = test_mae_score
+    
+    arr.append({"activation": "Dropout", "drop_procent": best_drop})
+    return [arr, best_err]
+
+
+def test_numb_regularizers(arr, last, min_reg, max_reg, epochs):
+    best_err = 1000
+    best_act = ""
+    best_reg = 0
+    best_neirons = 0
+    for i in range(1, 6):
+        for j in range(1, 10):
+            neirons = int(last * ((3 - 0.3) / 10) * j)
+            reg = ((max_reg - min_reg) / 6.0) * i
+            arr2 = cp.deepcopy(arr)
+            arr2.append({"activation": "relu", "neirons": neirons, "regularizer": reg})
+            model1 = build_model_by_arr(arr)
+            model1.fit(train, train_labels, epochs=epochs, verbose=0)
+            test_mae_score = model1.evaluate(test, test_labels)[1]
+            if best_err > test_mae_score:
+                best_act = "relu"
+                best_reg = reg
+                best_neirons = neirons
+                best_err = test_mae_score
+            
+            arr2 = cp.deepcopy(arr)
+            arr2.append({"activation": "sigmoid", "neirons": neirons, "regularizer": reg})
+            model2 = build_model_by_arr(arr)
+            model2.fit(train, train_labels, epochs=epochs, verbose=0)
+            test_mae_score = model2.evaluate(test, test_labels)[1]
+            if best_err > test_mae_score:
+                best_act = "sigmoid"
+                best_reg = reg
+                best_neirons = neirons
+                best_err = test_mae_score
+            
+            arr2 = cp.deepcopy(arr)
+            arr2.append({"activation": "softmax", "neirons": neirons, "regularizer": reg})
+            model3 = build_model_by_arr(arr)
+            model3.fit(train, train_labels, epochs=epochs, verbose=0)
+            test_mae_score = model3.evaluate(test, test_labels)[1]
+            if best_err > test_mae_score:
+                best_act = "softmax"
+                best_reg = reg
+                best_neirons = neirons
+                best_err = test_mae_score
+    
+    arr.append({"activation": best_act, "neirons": best_neirons, "regularizer": best_reg})
+    return [arr, best_err]
+
+
+def get_network(data, data_labels, test, test_labels, exam, exam_labels, settings):
+    left_epoches, right_epoches = settings['epoches']
+    arr = []
+    best_err_now = 1000
+    best_epoches = 100
+    while right_epoches - left_epoches >= 4:
+        tr = False
+        last = -1
+        for line in reversed(arr):
+            if last == -1 and "neirons" in [*line.keys()]:
+                last = line["neirons"]
+        
+        arr1, best_err1 = test_numb_neirons(arr, last, int((left_epoches + right_epoches) / 2))
+        arr2, best_err2 = test_numb_dropout(arr, settings["dropouts"][0], settings["dropouts"][1], 
+                                            int((left_epoches + right_epoches) / 2))
+        arr3, best_err3 = test_numb_regularizers(arr, settings["reg_params"]["l2"][0], 
+                                                settings["reg_params"]["l2"][1], last, 
+                                                int((left_epoches + right_epoches) / 2))
+        if best_err_now > min(best_err1, best_err2, best_err3):
+            if best_err1 == min(best_err1, best_err2, best_err3):
+                arr = cp.deepcopy(arr1)
+            elif best_err2 == min(best_err1, best_err2, best_err3):
+                arr = cp.deepcopy(arr2)
+            elif best_err3 == min(best_err1, best_err2, best_err3):
+                arr = cp.deepcopy(arr3)
+            best_err_now = min(best_err1, best_err2, best_err3)
+            tr = True
+        
+        m1 = left_epoches + (right_epoches - left_epoches) / 3
+        model1 = build_model_by_arr(arr)
+        model1.fit(train, train_labels, epochs=m1, verbose=0)
+        test_mse_score1 = model1.evaluate(test, test_labels)
+        
+        m2 = right_epoches - (right_epoches - left_epoches) / 3
+        model2 = build_model_by_arr(arr)
+        model2.fit(train, train_labels, epochs=m2, verbose=0)
+        test_mse_score2 = model2.evaluate(test, test_labels)
+        
+        m3 = left_epoches + ((right_epoches - left_epoches) / 3) * 2
+        model3 = build_model_by_arr(arr)
+        model3.fit(train, train_labels, epochs=m3, verbose=0)
+        test_mse_score3 = model3.evaluate(test, test_labels)
+        
+        if best_err_now > min(test_mse_score1, test_mse_score2, test_mse_score3):
+            if test_mse_score1 == min(test_mse_score1, test_mse_score2, test_mse_score3):
+                r = m2
+                best_epoches = m1
+            elif test_mse_score2 == min(test_mse_score1, test_mse_score2, test_mse_score3):
+                r = int((m2 + m3) / 2)
+                l = int((m1 + m2) / 2)
+                best_epoches = m2
+            elif test_mse_score3 == min(test_mse_score1, test_mse_score2, test_mse_score3):
+                l = m2
+                best_epoches = m3
+            best_err_now = min(test_mse_score1, test_mse_score2, test_mse_score3)
+            tr = True
+            
+        if tr:
+            right_epoches = left_epoches
+    
+    model = build_model_by_arr(arr)
+    model.fit(train, train_labels, epochs=best_epoches, verbose=0)
+    test_mse_score = model.evaluate(exam, exam_labels)
+    print(test_mse_score)
+    return model
+
+
+min_epoch, max_epoch = 50, 300
+min_drop, max_drop = [0.1, 0.5]
+min_l1, max_l1 = [0.001, 0.01]
+min_l2, max_l2 = [0.001, 0.01]
+min_layer, max_layer = 3, 10
+min_neirons, max_neirons = 10, 250
+model = get_network(data, data_labels, test, test_labels, exam, exam_labels, {'epoches': [min_epoch, max_epoch], 
+                                'optimizers': ['rmsprop'], 'loses': ['mse', 'mae'], 'metrics': ['mse', 'mae'], 
+                                'activations': ['relu', 'sigmoid'], 'regularizers': ['l1', 'l2', 'l1_l2'], 
+                                'reg_params': {'l1': [min_l1, max_l1], 'l2': [min_l2, max_l2]}, 
+                                'dropouts': [min_drop, max_drop], 'layers': [min_layer, max_layer],
+                                'neirons': [min_neirons, max_neirons]})
+model.save('auto_network.h5')
