@@ -269,10 +269,10 @@ def get_network(data, data_labels, test, test_labels, exam, exam_labels, setting
             networks_quantity += 1
             if [*best_err_now.keys()][0] in [*best_networks.keys()] or [*best_err_now.keys()][0] in [*best_networks_now.keys()]:
                 best_err_now[[*best_err_now.keys()][0] + 0.000001] = best_err_now[[*best_err_now.keys()][0]]
-                del best_err_now[[*best_err_now.keys()][0]]
+                # del best_err_now[[*best_err_now.keys()][0]]
             if [*best_err_now.keys()][1] in [*best_networks.keys()] or [*best_err_now.keys()][1] in [*best_networks_now.keys()]:
                 best_err_now[[*best_err_now.keys()][1] + 0.000001] = best_err_now[[*best_err_now.keys()][1]]
-                del best_err_now[[*best_err_now.keys()][1]]
+                # del best_err_now[[*best_err_now.keys()][1]]
             
             best_networks_now[[*best_err_now.keys()][0]] = Model_keeper(network.get_layers() + [[*best_err_now.values()][0]], epochs)
             best_networks_now[[*best_err_now.keys()][1]] = Model_keeper(network.get_layers() + [[*best_err_now.values()][1]], epochs)
