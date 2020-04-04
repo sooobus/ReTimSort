@@ -212,7 +212,7 @@ def get_act_err(new_layer, network, min_max, num_test_data):
     elif new_layer[0] == "regulaizer_l2":
         best_err_reg = 10000
         best_act_reg = "relu"
-        for activation in product(["relu"], [_ for _ in range(1, 100, 50)]): #, "sigmoid", "softmax"
+        for activation in product(["relu", "sigmoid", "softmax"], [_ for _ in range(1, 100, 30)]):
             num_neirons = int((min_max['neirons'][1] - min_max['neirons'][0]) / 100 * activation[1] + min_max['neirons'][0])
             num_reg = (min_max['reg_params']['l2'][1] - min_max['reg_params']['l2'][0]) / 100 * new_layer[1] + min_max['reg_params']['l2'][0]
             act = {"activation": activation[0], "neirons": num_neirons, "regularizer": num_reg}
@@ -241,15 +241,14 @@ def get_network(data, data_labels, test, test_labels, exam, exam_labels, setting
     left_epoches, right_epoches = settings['epoches']
     arr = []
     last_best_err = 10000
-    networks_quantity = 3 # 40
+    networks_quantity = 40
     epochs = 300
-    const_best_networks = 2
+    const_best_networks = 5
     best_networks = {10000 + _: Model_keeper([], epochs) for _ in range(networks_quantity)}
     tr = True
     num_test_data = 0
     while tr or reduce((lambda x, y: x + y), [*best_networks.keys()]) / networks_quantity > last_best_err and networks_quantity >= const_best_networks:
         print(networks_quantity, datetime.now())
-        print(best_networks)
         last_best_arr = reduce((lambda x, y: x + y), [*best_networks.keys()]) / networks_quantity
         tr = False
         best_errs = {}
@@ -258,8 +257,8 @@ def get_network(data, data_labels, test, test_labels, exam, exam_labels, setting
             network = best_networks[key]
             best_err_now = {10000: "relu", 10001: "relu"}
             best_networks_now = {}
-            for new_layer in product(["relu", "sigmoid"], 
-                                 [_ for _ in range(1, 100, 50)]): #, "softmax", "regulaizer_l2", "dropout", ""
+            for new_layer in product(["relu", "sigmoid", "softmax", "regulaizer_l2", "dropout", ""], 
+                                 [_ for _ in range(1, 100, 10)]):
                 
                 err, act = get_act_err(new_layer, network, {"neirons": [settings['neirons'][0], settings['neirons'][1]],
                                                             "reg_params": [settings['reg_params']['l2'][0], settings['reg_params']['l2'][1]],
@@ -301,16 +300,13 @@ def get_network(data, data_labels, test, test_labels, exam, exam_labels, setting
                     min_err = err
                     best_act = best_errs[err]
         
-        print(best_networks, sorted([*best_networks.keys()]), sorted([*best_networks.keys()])[const_best_networks + 1:])
         for err in sorted([*best_networks.keys()])[const_best_networks + 1:]:
             err_n = best_networks[err].add_layer_and_test(best_act, num_test_data)
             while err_n in [*best_networks.keys()] or err_n in [*best_networks_now.keys()]:
                 err_n += 0.000001
             best_networks_now[err_n] = best_networks[err] 
         
-        print(best_networks_now)
         best_networks = {err: best_networks_now[err] for err in sorted([*best_networks_now.keys()])[:int((len(best_networks_now) - (len(best_networks_now) % 2)) / 2)]}
-        print(best_networks)
         networks_quantity = len([*best_networks.keys()])
         num_test_data += 1
         num_test_data %= len(test)
