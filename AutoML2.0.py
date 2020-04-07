@@ -31,118 +31,106 @@ from sklearn.preprocessing import OneHotEncoder
 
 
 from math import sqrt
+from math import floor
 
-all_res = {}
+TRAIN = 6171
+EXAM = 500
 
 def get_data():
-    df = pd.DataFrame({'Quantity': [], 'Best_Minrun': [], 'Best_Time': []})
+    
+    def get_arr_by_str(s):
+        return s.replace('[', '').replace(']', '').replace(',', '').split()
+
+    def get_data_from_file(filename, path):
+        db = pd.read_csv(path + '/' + file)
+        df = pd.DataFrame({'Quantity': [], 'Best_Minrun': [], 'Best_Time': []})
+        for i in range(len(db['Best_minrun'])):
+            df['Best_Minrun'][i] = get_arr_by_str(db['Best_minrun'][i])
+
+        for i in range(len(df['Best_Minrun'])):
+            for j in range(len(df['Best_Minrun'][i])):
+                df['Best_Minrun'][i][j] = int(df['Best_Minrun'][i][j])
+
+        for i in range(len(db['Quantity'])):
+            df['Quantity'][i] = int(db['Quantity'][i])
+
+        for i in range(len(db['Best_time'])):
+            df['Best_Time'][i] = get_arr_by_str(db['Best_time'][i])
+        
+        local_train_pairs = {}
+        for i in range(len(df['Quantity'])):
+            pair = float(df['Quantity'][i]), float(df['Best_Minrun'][i][0])
+            local_train_pairs[pair] = 0
+        return local_train_pairs
+    
     pd.options.mode.chained_assignment = None
+    # path = sys.argv[0]
     path = "/home/leha/Desktop/projects/all_timsort_data"
     directory = os.path.join(path)
     train_pairs = {}
-    global all_res
-    z = 0
     for root, dirs, files in os.walk(directory):
         for file in files:
             if file.endswith(".csv"):
-                db = pd.read_csv(path + "/" + file)
-                z_m = 0
-                all_sizes = []
-                for i in range(len(db['Best_minrun'])):
-                    df['Best_Minrun'][i - z_m] = cp.deepcopy(db['Best_minrun'][i].replace('[', ''))
-                    df['Best_Minrun'][i - z_m] = cp.deepcopy(df['Best_Minrun'][i - z_m].replace(']', ''))
-                    df['Best_Minrun'][i - z_m] = cp.deepcopy(df['Best_Minrun'][i - z_m].replace(',', ''))
-                    df['Best_Minrun'][i - z_m] = cp.deepcopy(df['Best_Minrun'][i - z_m]).split()
-                for i in range(len(df['Best_Minrun'])):
-                    for j in range(len(df['Best_Minrun'][i])):
-                        df['Best_Minrun'][i][j] = int(df['Best_Minrun'][i][j])
-                
-                z_m = 0
-                all_sizes = []
-                for i in range(len(db['Quantity'])):
-                    df['Quantity'][i - z_m] = int(db['Quantity'][i])
-                
-                z_m = 0
-                all_sizes = []
-                for i in range(len(db['Best_time'])):
-                    df['Best_Time'][i - z_m] = cp.deepcopy(db['Best_time'][i].replace('[', ''))
-                    df['Best_Time'][i - z_m] = cp.deepcopy(df['Best_Time'][i - z_m].replace(']', ''))
-                    df['Best_Time'][i - z_m] = cp.deepcopy(df['Best_Time'][i - z_m].replace(',', ''))
-                    df['Best_Time'][i - z_m] = cp.deepcopy(df['Best_Time'][i - z_m].split())
-                
-                for i in range(len(df['Quantity'])):
-                    train_pairs[float(df['Quantity'][i]), float(df['Best_Minrun'][i][0])] = 0
-                    z += 1
-                for i in range(len(df['Quantity'])):
-                    all_res[df['Quantity'][i]] = {'minruns': df['Best_Minrun'][i], 'times':df['Best_Time'][i]} # for graphics
-
+                train_pairs.update(get_data_from_file(file, path))
+    
     return train_pairs
 
 
-pairs = get_data()
-pairs = sorted([*pairs.keys()])
+def get_parsed_data():
+    
+    def normalize_data(mean, std, data):
+        data -= mean
+        data /= std
+    
+    def divide_data(data):
+        return [data[:floor(len(data) / 4)], 
+                data[floor(len(data) / 4):floor(len(data) / 2)], 
+                data[floor(len(data) / 2):-floor(len(data) / 4)], 
+                data[-floor(len(data) / 4):]]
+    
+    pairs = get_data()
+    pairs = sorted([*pairs.keys()])
 
-data, data_labels = np.asarray([pair[0] for pair in pairs]), np.asarray([pair[1] for pair in pairs])
+    data, data_labels = np.asarray([pair[0] for pair in pairs]), np.asarray([pair[1] for pair in pairs])
 
-train_const = 6171
-exam_len_const = 500
+    train, train_labels = data[:TRAIN], data_labels[:TRAIN]
 
-train = data[:train_const]
-train_labels = data_labels[:train_const]
-
-exam = np.asarray([])
-exam_labels = np.asarray([])
-
-test_p = np.asarray([])
-test_labels_p = np.asarray([])
-
-train_p = np.asarray([])
-train_labels_p = np.asarray([])
-left = train_const + 1
-right = len(data)
-for i in range(left, right):
-    if i % 2 == 0:
-        test_p = np.append(test_p, data[i])
-        test_labels_p = np.append(test_labels_p, data_labels[i])
-    else:
-        if len(exam) < exam_len_const and i % 3 != 0:
-            exam = np.append(exam, data[i])
-            exam_labels = np.append(exam_labels, data_labels[i])
+    exam, exam_labels = np.asarray([]), np.asarray([])
+    test_p, test_labels_p = np.asarray([]), np.asarray([])
+    train_p, train_labels_p = np.asarray([]), np.asarray([])
+    
+    left, right = TRAIN + 1, len(data)
+    for i in range(left, right):
+        if i % 2 == 0:
+            test_p = np.append(test_p, data[i])
+            test_labels_p = np.append(test_labels_p, data_labels[i])
         else:
-            train_p = np.append(train_p, data[i])
-            train_labels_p = np.append(train_labels_p, data_labels[i])
+            if len(exam) < EXAM and i % 3 != 0:
+                exam = np.append(exam, data[i])
+                exam_labels = np.append(exam_labels, data_labels[i])
+            else:
+                train_p = np.append(train_p, data[i])
+                train_labels_p = np.append(train_labels_p, data_labels[i])
 
-test = test_p
-test_labels = test_labels_p
+    test, test_labels = test_p, test_labels_p
 
-train = np.append(train, train_p)
-train_labels = np.append(train_labels, train_labels_p)
+    train, train_labels = np.append(train, train_p), np.append(train_labels, train_labels_p)
 
-mean = train.mean(axis=0)
-train -= mean
-std = train.std(axis=0) # std - стандартное отклонение = sqrt(mean(abs(x - x.mean())**2)) mean - среднее арифметическое
-train /= std
+    mean = train.mean(axis=0)
+    train -= mean
+    std = train.std(axis=0)
+    train /= std
+    
+    normalize_data(mean, std, test)
+    normalize_data(mean, std, exam)
+    
+    test, test_labels = divide_data(test), divide_data(test_labels)
 
-test -= mean
-test /= std
-
-exam -= mean
-exam /= std
-
-test = [test[:int((len(test) - (len(test) % 4)) / 4)], 
-        test[int((len(test) - (len(test) % 4)) / 4):int((len(test) - (len(test) % 2)) / 2)], 
-        test[int((len(test) - (len(test) % 2)) / 2):-int((len(test) - (len(test) % 4)) / 4)], 
-        test[-int((len(test) - (len(test) % 4)) / 4):]]
-
-test_labels = [test_labels[:int((len(test_labels) - (len(test_labels) % 4)) / 4)], 
-        test_labels[int((len(test_labels) - (len(test_labels) % 4)) / 4):int((len(test_labels) - (len(test_labels) % 2)) / 2)], 
-        test_labels[int((len(test_labels) - (len(test_labels) % 2)) / 2):-int((len(test_labels) - (len(test_labels) % 4)) / 4)], 
-        test_labels[-int((len(test_labels) - (len(test_labels) % 4)) / 4):]]
-
-data_p = {'mean': mean, 'std': std}
-with open('data.json', 'w') as f_write:
-    json.dump(data_p, f_write)
-
+    data_p = {'mean': mean, 'std': std}
+    with open('data.json', 'w') as f_write:
+        json.dump(data_p, f_write)
+    
+    return [train, train_labels, test, test_labels, exam, exam_labels]
 
 
 class Model_keeper:
