@@ -237,56 +237,95 @@ def get_act_err(new_layer, network, min_max, num_test_data):
 
 
 
-def get_network(data, data_labels, test, test_labels, exam, exam_labels, settings):
-    left_epoches, right_epoches = settings['epoches']
+
+def get_act(new_layer, d_act):
+    act = {}
+    num_reg = 0
+    drop_procent = 0
+    if len(new_layer[0].split()) > 1:
+        num_reg = ((d_act[new_layer[0].split()[0]][1] - d_act[new_layer[0].split()[0]][0]) 
+                    / 100) * new_layer[1] * d_act[new_layer[0].split()[0]][2] + d_act[new_layer[0].split()[0]][0]
+    
+    num_neirons = ((d_act[new_layer[0].split()[-1]][1] - d_act[new_layer[0].split()[-1]][0]) 
+                    / 100) * new_layer[1] * d_act[new_layer[0].split()[-1]][2] + d_act[new_layer[0].split()[-1]][0]
+
+    act["activation"], act["neirons"] = new_layer[0].split()[-1], num_neirons
+    act["regularizer"] = num_reg
+    return act
+
+
+MIN_NETWORKS = 2
+EPOCHS = 200
+BEST_NETWORKS = 3
+
+
+def get_network(train, train_labels, test, test_labels, exam, exam_labels, settings):
+    d_act = {"relu": [settings['neirons'][0], settings['neirons'][1], 1]}
+    d_act["sigmoid"], d_act["softmax"], d_act["-"] = d_act["relu"], d_act["relu"], d_act["relu"]
+    d_act["dropout"] = [settings['dropouts'][0], settings['dropouts'][1], 1]
+    d_act["regulaizer"] = [settings['reg_params']['l2'][0], settings['reg_params']['l2'][1], 3]
     arr = []
     last_best_err = 10000
-    networks_quantity = 40
-    epochs = 300
-    const_best_networks = 5
-    best_networks = {10000 + _: Model_keeper([], epochs) for _ in range(networks_quantity)}
-    tr = True
     num_test_data = 0
-    while tr or reduce((lambda x, y: x + y), [*best_networks.keys()]) / networks_quantity > last_best_err and networks_quantity >= const_best_networks:
-        print(networks_quantity, datetime.now())
+    
+    best_networks = {}
+    for new_layer in product(["regulaizer sigmoid", "dropout", "-"], [_ for _ in range(1, 100, 20)]):
+        if new_layer[1] == "" and new_layer[1] * d_act[new_layer[0].split()[0]][2] > 100:
+            continue
+        
+        act = get_act(new_layer, d_act)
+        
+        network = Model_keeper([act], EPOCHS)
+        err = network.test_model(train, train_labels, test, test_labels, num_test_data)
+        best_networks[err] = network
+
+    networks_quantity = len([*best_networks.keys()])
+    while reduce((lambda x, y: x + y),
+                 [*best_networks.keys()]) / networks_quantity < last_best_err and networks_quantity >= MIN_NETWORKS:
         last_best_arr = reduce((lambda x, y: x + y), [*best_networks.keys()]) / networks_quantity
-        tr = False
-        best_errs = {}
-        best_acts = {}
-        for key in sorted([*best_networks.keys()])[:const_best_networks]:
+        best_errs, best_acts = {}, {}
+        best_networks_now = {} # "relu", "sigmoid", "softmax", "regulaizer relu", "regulaizer sigmoid", "dropout", "-"
+        for key in sorted([*best_networks.keys()])[:BEST_NETWORKS]:
             network = best_networks[key]
             best_err_now = {10000: "relu", 10001: "relu"}
-            best_networks_now = {}
-            for new_layer in product(["relu", "sigmoid", "softmax", "regulaizer_l2", "dropout", ""], 
-                                 [_ for _ in range(1, 100, 10)]):
-                
-                err, act = get_act_err(new_layer, network, {"neirons": [settings['neirons'][0], settings['neirons'][1]],
-                                                            "reg_params": [settings['reg_params']['l2'][0], settings['reg_params']['l2'][1]],
-                                                            "dropouts": [settings['dropouts'][0], settings['dropouts'][1]]}, num_test_data)
+            for new_layer in product(["relu", "regulaizer sigmoid", "dropout", "-"], [_ for _ in range(1, 100, 20)]):
+                if new_layer[1] * d_act[new_layer[0].split()[0]][2] > 100:
+                    continue
+
+                act = get_act(new_layer, d_act)
+
+                network_now = Model_keeper(network.arr + [act], EPOCHS)
+                err = network_now.test_model(train, train_labels, test, test_labels, num_test_data)
+
                 if max(best_err_now) > err:
                     del best_err_now[max(best_err_now)]
-                    best_err_now[err] = act
+                    best_err_now[err] = network_now.arr[-1]
+
+                num_test_data = (num_test_data + 1) % len(test)
+
             networks_quantity += 1
-            if [*best_err_now.keys()][0] in [*best_networks.keys()] or [*best_err_now.keys()][0] in [*best_networks_now.keys()]:
+            if [*best_err_now.keys()][0] in [*best_networks.keys()] or [*best_err_now.keys()][0] in [
+                *best_networks_now.keys()]:
                 best_err_now[[*best_err_now.keys()][0] + 0.000001] = best_err_now[[*best_err_now.keys()][0]]
-                # del best_err_now[[*best_err_now.keys()][0]]
-            if [*best_err_now.keys()][1] in [*best_networks.keys()] or [*best_err_now.keys()][1] in [*best_networks_now.keys()]:
+            if [*best_err_now.keys()][1] in [*best_networks.keys()] or [*best_err_now.keys()][1] in [
+                *best_networks_now.keys()]:
                 best_err_now[[*best_err_now.keys()][1] + 0.000001] = best_err_now[[*best_err_now.keys()][1]]
-                # del best_err_now[[*best_err_now.keys()][1]]
-            
-            best_networks_now[[*best_err_now.keys()][0]] = Model_keeper(network.get_layers() + [[*best_err_now.values()][0]], epochs)
-            best_networks_now[[*best_err_now.keys()][1]] = Model_keeper(network.get_layers() + [[*best_err_now.values()][1]], epochs)
-            
+
+            best_networks_now[[*best_err_now.keys()][0]] = Model_keeper(network.arr + [[*best_err_now.values()][0]],
+                                                                        EPOCHS)
+            best_networks_now[[*best_err_now.keys()][1]] = Model_keeper(network.arr + [[*best_err_now.values()][1]],
+                                                                        EPOCHS)
+
             best_errs[[*best_err_now.keys()][0]] = best_err_now[[*best_err_now.keys()][0]]
             best_errs[[*best_err_now.keys()][1]] = best_err_now[[*best_err_now.keys()][1]]
-        
+
         num_elements = {}
         for act in [*best_errs.values()]:
             if act in [*num_elements.keys()]:
                 num_elements[str(act)] += 1
             else:
                 num_elements[str(act)] = 1
-        
+
         best_act = {}
         if sorted([*num_elements.values()])[-1] > 1:
             best_num = sorted([*num_elements.values()])[-1]
@@ -294,24 +333,22 @@ def get_network(data, data_labels, test, test_labels, exam, exam_labels, setting
                 if best_num == num_elements[key]:
                     best_act = dict(key)
         else:
-            min_err = 10000
-            for err in best_errs.keys():
-                if min_err > err:
-                    min_err = err
-                    best_act = best_errs[err]
-        
-        for err in sorted([*best_networks.keys()])[const_best_networks + 1:]:
-            err_n = best_networks[err].add_layer_and_test(best_act, num_test_data)
+            best_act = best_errs[reduce(lambda a, b: a if (a < b) else b, best_errs.keys())]
+
+        for err in sorted([*best_networks.keys()])[BEST_NETWORKS:]:
+            best_networks[err] = Model_keeper(best_networks[err].arr + [best_act], EPOCHS)
+            err_n = best_networks[err].test_model(train, train_labels, test, test_labels, num_test_data)
             while err_n in [*best_networks.keys()] or err_n in [*best_networks_now.keys()]:
                 err_n += 0.000001
-            best_networks_now[err_n] = best_networks[err] 
-        
-        best_networks = {err: best_networks_now[err] for err in sorted([*best_networks_now.keys()])[:int((len(best_networks_now) - (len(best_networks_now) % 2)) / 2)]}
+            best_networks_now[err_n] = best_networks[err]
+            num_test_data = (num_test_data + 1) % len(test)
+
+        best_networks = {err: best_networks_now[err] for err in
+                         sorted([*best_networks_now.keys()])[:floor((len(best_networks_now) + 1) / 2)]}
         networks_quantity = len([*best_networks.keys()])
-        num_test_data += 1
-        num_test_data %= len(test)
-    
-    return [best_networks[err] for err in sorted([*best_networks.keys()])[:5]]
+        num_test_data = (num_test_data + 1) % len(test)
+
+    return [best_networks[err] for err in sorted([*best_networks.keys()])[:min(3, len([*best_networks.keys()]))]]
 
 
 
